@@ -38,6 +38,11 @@ def run_checks():
                          os.path.exists(os.path.join(base, ".env.example"))))
     results.append(check("requirements.txt exists",
                          os.path.exists(os.path.join(base, "requirements.txt"))))
+    results.append(check("nginx.conf exists",
+                         os.path.exists(os.path.join(base, "nginx.conf"))))
+    for module in ["auth.py", "rate_limiter.py", "cost_guard.py", "storage.py"]:
+        results.append(check(f"app/{module} exists",
+                             os.path.exists(os.path.join(base, "app", module))))
     results.append(check("railway.toml or render.yaml exists",
                          os.path.exists(os.path.join(base, "railway.toml")) or
                          os.path.exists(os.path.join(base, "render.yaml"))))
@@ -87,10 +92,30 @@ def run_checks():
                              "api_key" in content.lower() or "verify_token" in content))
         results.append(check("Rate limiting implemented",
                              "rate_limit" in content.lower() or "429" in content))
+        results.append(check("Conversation history implemented",
+                             "session_id" in content and "history" in content.lower()))
         results.append(check("Graceful shutdown (SIGTERM)",
                              "SIGTERM" in content))
         results.append(check("Structured logging (JSON)",
                              "json.dumps" in content or '"event"' in content))
+
+    storage_py = os.path.join(base, "app", "storage.py")
+    if os.path.exists(storage_py):
+        content = open(storage_py).read()
+        results.append(check("Redis storage implemented",
+                             "redis.from_url" in content and "session:" in content))
+
+    rate_py = os.path.join(base, "app", "rate_limiter.py")
+    if os.path.exists(rate_py):
+        content = open(rate_py).read()
+        results.append(check("Redis rate limiting implemented",
+                             "zadd" in content and "429" in content))
+
+    cost_py = os.path.join(base, "app", "cost_guard.py")
+    if os.path.exists(cost_py):
+        content = open(cost_py).read()
+        results.append(check("Monthly cost guard implemented",
+                             "budget:" in content and "incrbyfloat" in content))
     else:
         results.append(check("app/main.py exists", False, "Create app/main.py!"))
 
@@ -115,6 +140,14 @@ def run_checks():
                              ".env" in content))
         results.append(check(".dockerignore covers __pycache__",
                              "__pycache__" in content))
+
+    compose = os.path.join(base, "docker-compose.yml")
+    if os.path.exists(compose):
+        content = open(compose).read()
+        results.append(check("docker-compose includes Redis",
+                             "redis:" in content))
+        results.append(check("docker-compose includes Nginx load balancer",
+                             "nginx:" in content))
 
     # ── Summary ───────────────────────────────────���
     passed = sum(1 for r in results if r["passed"])

@@ -6,12 +6,15 @@ Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
 
 - [x] Dockerfile (multi-stage, < 500 MB)
 - [x] docker-compose.yml (agent + redis)
+- [x] Nginx load balancer
 - [x] .dockerignore
 - [x] Health check endpoint (`GET /health`)
 - [x] Readiness endpoint (`GET /ready`)
 - [x] API Key authentication
 - [x] Rate limiting
 - [x] Cost guard
+- [x] Conversation history in Redis
+- [x] Stateless design
 - [x] Config từ environment variables
 - [x] Structured logging
 - [x] Graceful shutdown
@@ -26,11 +29,13 @@ Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
 ├── app/
 │   ├── main.py         # Entry point — kết hợp tất cả
 │   ├── config.py       # 12-factor config
-│   ├── auth.py         # API Key + JWT
-│   ├── rate_limiter.py # Rate limiting
-│   └── cost_guard.py   # Budget protection
+│   ├── auth.py         # API Key auth
+│   ├── rate_limiter.py # Redis rate limiting
+│   ├── cost_guard.py   # Redis budget protection
+│   └── storage.py      # Redis session history
 ├── Dockerfile          # Multi-stage, production-ready
-├── docker-compose.yml  # Full stack
+├── docker-compose.yml  # Full stack: nginx + agent + redis
+├── nginx.conf          # Load balancer config
 ├── railway.toml        # Deploy Railway
 ├── render.yaml         # Deploy Render
 ├── .env.example        # Template
@@ -44,20 +49,25 @@ Kết hợp TẤT CẢ những gì đã học trong 1 project hoàn chỉnh.
 
 ```bash
 # 1. Setup
-cp .env.example .env
+cp .env.example .env.local
 
-# 2. Chạy với Docker Compose
-docker compose up
+# 2. Chạy với Docker Compose (scale 3 agent instances nếu muốn test LB)
+docker compose up --scale agent=3
 
 # 3. Test
-curl http://localhost/health
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
 
-# 4. Lấy API key từ .env, test endpoint
-API_KEY=$(grep AGENT_API_KEY .env | cut -d= -f2)
+# 4. Lấy API key từ .env.local, test endpoint
+API_KEY=$(grep AGENT_API_KEY .env.local | cut -d= -f2)
 curl -H "X-API-Key: $API_KEY" \
-     -X POST http://localhost/ask \
+     -X POST http://localhost:8000/ask \
      -H "Content-Type: application/json" \
      -d '{"question": "What is deployment?"}'
+
+# 5. Tiếp tục conversation bằng session_id trả về ở response
+curl -H "X-API-Key: $API_KEY" \
+     http://localhost:8000/sessions/<session_id>/history
 ```
 
 ---
@@ -94,7 +104,7 @@ railway domain
 ## Kiểm Tra Production Readiness
 
 ```bash
-python check_production_ready.py
+python3 check_production_ready.py
 ```
 
 Script này kiểm tra tất cả items trong checklist và báo cáo những gì còn thiếu.

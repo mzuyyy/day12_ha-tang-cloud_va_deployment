@@ -18,6 +18,11 @@ class Settings:
 
     # LLM
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    nvidia_api_key: str = field(default_factory=lambda: os.getenv("NVIDIA_API_KEY", ""))
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "auto"))
+    llm_base_url: str = field(
+        default_factory=lambda: os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    )
     llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4o-mini"))
 
     # Security
@@ -29,16 +34,29 @@ class Settings:
 
     # Rate limiting
     rate_limit_per_minute: int = field(
-        default_factory=lambda: int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
+        default_factory=lambda: int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
     )
 
     # Budget
-    daily_budget_usd: float = field(
-        default_factory=lambda: float(os.getenv("DAILY_BUDGET_USD", "5.0"))
+    monthly_budget_usd: float = field(
+        default_factory=lambda: float(os.getenv("MONTHLY_BUDGET_USD", "10.0"))
+    )
+    daily_budget_usd: float = field(default_factory=lambda: float(os.getenv("DAILY_BUDGET_USD", "5.0")))
+    price_per_1k_input_tokens: float = field(
+        default_factory=lambda: float(os.getenv("PRICE_PER_1K_INPUT_TOKENS", "0.00015"))
+    )
+    price_per_1k_output_tokens: float = field(
+        default_factory=lambda: float(os.getenv("PRICE_PER_1K_OUTPUT_TOKENS", "0.0006"))
     )
 
     # Storage
-    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
+    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    session_ttl_seconds: int = field(
+        default_factory=lambda: int(os.getenv("SESSION_TTL_SECONDS", "86400"))
+    )
+    max_history_messages: int = field(
+        default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
+    )
 
     def validate(self):
         logger = logging.getLogger(__name__)
@@ -47,7 +65,7 @@ class Settings:
                 raise ValueError("AGENT_API_KEY must be set in production!")
             if self.jwt_secret == "dev-jwt-secret":
                 raise ValueError("JWT_SECRET must be set in production!")
-        if not self.openai_api_key:
+        if not self.openai_api_key and not self.nvidia_api_key:
             logger.warning("OPENAI_API_KEY not set — using mock LLM")
         return self
 
